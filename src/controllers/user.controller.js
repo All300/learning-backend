@@ -12,7 +12,6 @@ const generateAccessAndRefreshTokens = async(userId) => {
         const user = await User.findById(userId)
         const accessToken = user.generateAccessToken()
         const refreshToken = user.generateRefreshToken()
-
         user.refreshToken = refreshToken
         await user.save({validateBeforeSave: false})
 
@@ -156,8 +155,8 @@ const logoutUser = asyncHandler( async(req, res) => {
     await User.findByIdAndUpdate(
         req.user._id,
         {
-            $set: {
-                refreshToken: undefined
+            $unset: {
+                refreshToken: 1
             }
         },
         {
@@ -181,6 +180,7 @@ const logoutUser = asyncHandler( async(req, res) => {
 
 const refreshAccessToken =  asyncHandler( async (req, res) => {
     const incomingRefreshToken = req.cookies.refreshToken || req.body.refreshToken
+    //console.log(incomingRefreshToken)
 
     if(!incomingRefreshToken){
         throw new ApiError(401, "Unathorized request")
@@ -191,7 +191,7 @@ const refreshAccessToken =  asyncHandler( async (req, res) => {
             incomingRefreshToken,
             process.env.REFRESH_TOKEN_SECRET,
         )
-    
+        //console.log(decodedToken)
         const user = await User.findById(decodedToken?._id)
     
         if(!user){
@@ -202,25 +202,26 @@ const refreshAccessToken =  asyncHandler( async (req, res) => {
             throw new ApiError(401, "Refresh token is expired or used")
         }
     
-        const {accessToken, newRefreshToken} = await generateAccessAndRefreshTokens(user._id)
-    
         const options = {
             httpOnly: true,
             secure: true
         }
-    
+
+        //console.log(user)
+        const {accessToken, refreshToken: newRefreshToken} = await generateAccessAndRefreshTokens(user._id)
+        
         return res
         .status(200)
         .cookie("accessToken", accessToken, options)
         .cookie("refreshToken", newRefreshToken, options)
-        .json(
+        .json(new ApiResponse(
             200,
             {
                 accessToken,
                 refreshToken: newRefreshToken
             },
             "Access Token refreshed"
-        )
+        ))
     } catch (error) {
         throw new ApiError(401, error?.message || "Invalid refresh token")
     }
@@ -246,7 +247,7 @@ const changeCurrentPassword = asyncHandler( async (req, res) => {
 
 const getCurrentUser = asyncHandler(async(req, res) => {
 
-    return response.status(200)
+    return res.status(200)
     .json(new ApiResponse(200, req.user, "Current user fetched successfully"))
 })
 
@@ -373,10 +374,10 @@ const getUserChannelProfile = asyncHandler(async(req, res) => {
         {
             $addFields: {
                 subscribersCount: {
-                    $size: "#subscribers"
+                    $size: "$subscribers"
                 },
                 channelSubscribedToCount: {
-                    $isze: "$subscribedTo"
+                    $size: "$subscribedTo"
                 },
                 isSubscribed: {
                     $cond: {
@@ -414,21 +415,21 @@ const getWatchHistory = asyncHandler(async(req, res) => {
     const user = await User.aggregate([
         {
             $match: {
-                _id: new mongoose.Types.ObjectId(req.user._id.totring()) 
+                _id: new mongoose.Types.ObjectId(req.user._id.toString()) 
             }
         },
         {
             $lookup: {
                 from: "videos",
                 localField: "watchHistory",
-                foreignField: "_id"
+                foreignField: "_id",
                 as: "watchHistory",
                 pipeline: [
                     {
                         $lookup: {
                             from: "users",
                             localField: "owner",
-                            foreignField: "_id"
+                            foreignField: "_id",
                             as: "owner",
                             pipeline: [
                                 {
