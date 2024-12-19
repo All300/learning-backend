@@ -1,12 +1,85 @@
 import mongoose, { isValidObjectId } from "mongoose"
-import { ApiError } from "../utils/ApiError"
-import { ApiResponse } from "../utils/ApiResponse"
-import { asyncHandler } from "../utils/asyncHandler"
-import { Comment } from "../models/comment.models"
-import { Video } from "../models/video.models"
+import { ApiError } from "../utils/ApiError.js"
+import { ApiResponse } from "../utils/ApiResponse.js"
+import { asyncHandler } from "../utils/asyncHandler.js"
+import { Comment } from "../models/comment.models.js"
+import { Video } from "../models/video.models.js"
 
 const getVideoComments = asyncHandler(async(req, res) => {
-    
+    const {videoId} = req.params
+    const {page = 1, limit = 10} = req.query
+
+    if(!videoId || !isValidObjectId(videoId)) throw new ApiError(401, "Invalid videoId")
+
+    if(!query || !query.trim() === "") throw new ApiError(401, "Query is required")
+
+    const getComments = await Comment.aggregate([
+        {
+            $match: {
+                video: new mongoose.Types.ObjectId(videoId)
+            }
+        },
+        {
+            $lookup: {
+                from: "users",
+                foreignField: "_id",
+                localField: "owner",
+                as: "owner",
+                pipeline: [
+                    {
+                        $project: {
+                            username: 1,
+                            fullName: 1,
+                            avatar: 1,
+                            _id: 1
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            $lookup: {
+                from: "likes",
+                foreignField: "comment",
+                localField: "_id",
+                as: "likes"
+            }
+        },
+        {
+            $addFields: {
+                likeCount: {
+                    $size: "$likes"
+                }
+            }
+        },
+        {
+            $project: {
+                _id: 1,
+                username: 1,
+                fullName: 1,
+                avatar: 1,
+                content: 1,
+                owner: 1,
+                likesCount: 1
+            }
+        },
+        {
+            $skip: (page - 1) * limit
+        },
+        {
+            $limit: parseInt(limit)
+        }
+    ])
+
+    if(!getComments || getComments.length === 0) throw new ApiError(404, "No comments found") 
+
+    return res
+    .status(200)
+    .json(new ApiResponse(
+        200, 
+        getComments,
+        "Comments fetched successfully"
+    ))
 })
 
 const addComment = asyncHandler(async(req, res) => {
@@ -22,6 +95,8 @@ const addComment = asyncHandler(async(req, res) => {
         throw new ApiError(401, "Please login to comment")
     }
 
+    if(!videoId || !isValidObjectId(videoId)) throw new ApiError(401, "Invalid videoId")
+
     const video = await Video.findById(videoId)
     if(!video){
         throw new ApiError(401, "No such video exixts")
@@ -34,7 +109,7 @@ const addComment = asyncHandler(async(req, res) => {
     })
 
     if(!comment){
-        throw new ApiError(500, "Error while saving the comment")
+        throw new ApiError(500, "Error while adding the comment")
     }
 
     return res
@@ -50,8 +125,8 @@ const updateComment = asyncHandler(async(req, res) => {
     const {commentId} = req.params
     const {newContent} = req.body
 
-    if(!isValidObjectId(commentId)) {
-        throw new ApiError(401, "Enter the valid comment id")
+    if(!commentId || !isValidObjectId(commentId)) {
+        throw new ApiError(401, "Invalid commentId")
     }
 
     if(!newContent) {
@@ -63,18 +138,20 @@ const updateComment = asyncHandler(async(req, res) => {
         throw new ApiError(401, "No such comment exists")
     }
 
-    if(req.user?._id !== comment.owner) {
+    if(comment.owner.toString() !== req.user?._id.toString()) {
         throw new ApiError(401, "Only owner can edit the comment")
     }
 
     comment.content = newContent
-    await comment.save({validateBeforeSave: false})
+    const updatedComment = await comment.save({validateBeforeSave: false})
+
+    if(!updatedComment) throw new ApiError(500, "something went wrong while updating the comment")
 
     return res
     .status(200)
     .json(new ApiResponse(
         200,
-        comment,
+        updatedComment,
         "Comment edited successfully"
     ))
 
@@ -83,8 +160,8 @@ const updateComment = asyncHandler(async(req, res) => {
 const deleteComment = asyncHandler(async(req, res) => {
     const{ commentId } = req.params
 
-    if(!isValidObjectId(commentId)){
-        throw new ApiError(401, "Enter valid comment Id")
+    if(!commentId || !isValidObjectId(commentId)){
+        throw new ApiError(401, "Invalid commentId")
     }
 
     const delComment = await Comment.deleteOne({

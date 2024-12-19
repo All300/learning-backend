@@ -1,13 +1,20 @@
-import mongoose, { isValidObjectId } from "mongoose"
-import { Like } from "../models/like.models"
-import { ApiError } from "../utils/ApiError"
-import { ApiResponse } from "../utils/ApiResponse"
-import { asyncHandler } from "../utils/asyncHandler"
+import { isValidObjectId } from "mongoose"
+import { Like } from "../models/like.models.js"
+import { ApiError } from "../utils/ApiError.js"
+import { ApiResponse } from "../utils/ApiResponse.js"
+import { asyncHandler } from "../utils/asyncHandler.js"
+import {Video} from "../models/video.models.js"
+import { Tweet } from "../models/Tweet.models.js"
+import { Comment } from "../models/comment.models.js"
 
 const toggleVideoLike = asyncHandler(async(req, res) => {
     const{videoId} = req.params
 
-    if(!isValidObjectId(videoId)) throw new ApiError(401, "invalid videoId")
+    if(!videoId || !isValidObjectId(videoId)) throw new ApiError(401, "invalid videoId")
+
+    const video = await Video.findById(videoId)
+
+    if(!video) throw new ApiError(404,"Video not found")
 
     const videoLike = await Like.findOne({
         $and: [{ likedBy: req.user?._id }, { video: videoId }]
@@ -22,28 +29,32 @@ const toggleVideoLike = asyncHandler(async(req, res) => {
         .status(200)
         .json(new ApiResponse(200, unlike, "Like removed"))
     }
+    else {
+        const like = await Like.create({
+            video: videoId,
+            likedBy: req.user?._id
+        })
+    
+        if(!like) throw new ApiError(500, "something went wrong like cannot be added")
 
-    const like = await Like.create({
-        video: videoId,
-        likedBy: req.user?._id
-    })
-
-    if(!like) throw new ApiError(500, "something went wrong like cannot be added")
-
-
-    return res
-    .status(200)
-    .json(new ApiResponse(
-        200,
-        like,
-        "like added"
-    ))
+        return res
+        .status(200)
+        .json(new ApiResponse(
+            200,
+            like,
+            "like added"
+        ))
+    }
 })
 
 const toggleCommentLike = asyncHandler(async(req, res) => {
     const {commentId} = req.params
     
-    if(!isValidObjectId(commentId)) throw new ApiError(401, "Invalid CommentId")
+    if(!commentId || !isValidObjectId(commentId)) throw new ApiError(401, "Invalid CommentId")
+
+    const comment = await Comment.findById(commentId)
+
+    if(!comment) throw new ApiError(404, "Comment not found")
 
     const commentLike = await Like.findOne({
         $and: [ {likedBy: req.user?._id}, {comment: commentId} ]
@@ -56,27 +67,32 @@ const toggleCommentLike = asyncHandler(async(req, res) => {
 
         return res.status(200).json(new ApiResponse(200, unlike, "like removed"))
     }
-
-    const like = await Like.create({
-        comment: commentId,
-        likedBy: req.user?._id
-    })
-
-    if(!like) throw new ApiError(500, "something went wrong like cannot be added")
-
-    return res
-    .status(200)
-    .json(new ApiResponse(
-        200,
-        like,
-        "like added"
-    ))
+    else {
+        const like = await Like.create({
+            comment: commentId,
+            likedBy: req.user?._id
+        })
+    
+        if(!like) throw new ApiError(500, "something went wrong like cannot be added")
+    
+        return res
+        .status(200)
+        .json(new ApiResponse(
+            200,
+            like,
+            "like added"
+        ))
+    }
 })
 
 const toggleTweetLike = asyncHandler(async(req, res) => {
     const {tweetId} = req.params
 
-    if(!isValidObjectId(tweetId)) throw new ApiError(401, "Invalid TweetId")
+    if(!tweetId || !isValidObjectId(tweetId)) throw new ApiError(401, "Invalid TweetId")
+
+    const tweet = await Tweet.findById(tweetId)
+
+    if(!tweet) throw new ApiError(404, "Tweet not found")
 
     const tweetLike = await Like.findOne({
         $and: [ {likedBy: req.user?._id}, {tweet: tweetId}]
@@ -89,19 +105,22 @@ const toggleTweetLike = asyncHandler(async(req, res) => {
 
         return res.status(200).json(new ApiResponse(200, unlike, "Like removed"))
     }
-
-    const like = await Like.create({
-        tweet: tweetId,
-        likedBy: req.user._id
-    })
-
-    if(!like) throw new ApiError(500, "something went wrong like cannot be added")
-
-    return res
-    .status(200)
-    .json(new ApiResponse(
-
-    ))
+    else {
+        const like = await Like.create({
+            tweet: tweetId,
+            likedBy: req.user._id
+        })
+    
+        if(!like) throw new ApiError(500, "something went wrong like cannot be added")
+    
+        return res
+        .status(200)
+        .json(new ApiResponse(
+            200, 
+            like,
+            "Like added"
+        ))
+    }
 })
 
 const getLikedVideos = asyncHandler(async(req, res) => {

@@ -6,7 +6,7 @@ import {
     deleteComment
 } from "../controllers/comment.controller.js"
 
-import { verifyJwt } from "../middlewares/multer.milddleware.js"
+import { verifyJwt } from "../middlewares/auth.middleware.js"
 
 const router = Router()
 

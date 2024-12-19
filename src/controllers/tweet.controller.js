@@ -1,13 +1,15 @@
-import { Tweet } from "../models/tweet.models.js"
+import { Tweet } from "../models/Tweet.models.js"
 import { asyncHandler } from "../utils/asyncHandler.js"
 import { ApiError } from "../utils/ApiError.js"
 import { ApiResponse } from "../utils/ApiResponse.js"
 import { isValidObjectId } from "mongoose"
+import { User } from "../models/user.models.js"
 
 const createTweet = asyncHandler(async(req, res) => {
     const {content} = req.body
     const {user} = req.user
-    if(!content) throw new ApiError(401, "Enter something to tweet")
+
+    if(!content || content.trim() === "") throw new ApiError(401, "Enter something to tweet")
     
     if(!user) throw new ApiError(401, "Please login to post tweet")
 
@@ -31,7 +33,7 @@ const getUserTweets = asyncHandler(async(req, res) => {
 
     const {userId} = req.params
 
-    if(!isValidObjectId(userId)) throw new ApiError(401, "Invalid userId")
+    if(!userId || !isValidObjectId(userId)) throw new ApiError(401, "Invalid userId")
 
     const userTweets = Tweet.find({
         owner: userId
@@ -53,9 +55,10 @@ const updateTweet = asyncHandler(async(req, res) => {
     const {tweetId} = req.params
     const {newContent} = req.body
 
-    if(!isValidObjectId(tweetId)) throw new ApiError(401, "Invalid tweetId")
-    if(!newContent) throw new ApiError(401, "Enter content to update")
+    if(!newContent || newContent.trim() === 0) throw new ApiError(401, "Enter content to update")
 
+    if(!tweetId || !isValidObjectId(tweetId)) throw new ApiError(401, "Invalid tweetId")
+    
     const findTweet = await Tweet.findById(tweetId)
 
     if(!findTweet) throw new ApiError(401, "No such tweet exists")
@@ -80,7 +83,7 @@ const deleteTweet = asyncHandler(async(req, res) => {
 
     const {tweetId} = req.params
     
-    if(!isValidObjectId(tweetId)) throw new ApiError(401, "Invalid tweetId")
+    if(!tweetId || !isValidObjectId(tweetId)) throw new ApiError(401, "Invalid tweetId")
 
     const delTweet = await Tweet.deleteOne({
         $and: [{owner: req.user?._id}, {_id: tweetId}]
